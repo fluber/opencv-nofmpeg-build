@@ -1,0 +1,68 @@
+# 產出不含 FFmpeg 的 OpenCV wheel（x86_64），掛到 Release 給 lottery-reader
+# （以及之後的 yolo-trainer）打 deb 時下載。
+#
+# 兩種觸發：
+#   · 推 v* tag（例如 v5.0.0-1）→ 編譯，wheel 掛到同名 Release
+#   · 手動（Actions → 產生 OpenCV wheel → Run workflow）→ 只留 Actions 產物，不掛 Release
+# 不掛在一般 push 上：OpenCV 一次要編十幾分鐘，而且版本很少換。
+#
+# 丟進 ubuntu:22.04 容器編（ci/build_in_container.sh）：部署目標是 Ubuntu 22.04，
+# 在比較新的 glibc/libstdc++ 上編出來的 cv2.so 裝過去會 ImportError。
+# 只編 x86_64：目前沒有 ARM（樹莓派）部署。要加的話，matrix 加一組
+# { arch: aarch64, runner: ubuntu-24.04-arm }（公開 repo 免費，原生編譯，不要走 QEMU）。
+name: 產生 OpenCV wheel
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write        # 建立 Release、上傳 wheel
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 容器內編譯 + 冒煙測試（glibc 2.35 基準）
+        run: docker run --rm -v "$PWD":/work -w /work ubuntu:22.04 bash ci/build_in_container.sh
+
+      # 容器是 root 跑的，產物擁有者要改回 runner，否則後面上傳步驟會踩權限
+      - name: 修正產物擁有者
+        run: docker run --rm -v "$PWD":/work ubuntu:22.04 chown -R "$(id -u):$(id -g)" /work/dist /work/build || true
+
+      - name: 檢查產物
+        run: |
+          set -e
+          WHL="$(ls dist/opencv_headless_noffmpeg-*-linux_${{ matrix.arch }}.whl)"
+          ls -la "$WHL"
+          sha256sum "$WHL"
+
+      # 同一個 tag 重跑時 Release 已存在；之後加 matrix 平行跑時也可能被另一個 job 先建好
+      # ——create 失敗就當作已存在，再上傳。
+      - name: 掛到 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes \
+            || gh release view "$GITHUB_REF_NAME" >/dev/null
+          gh release upload "$GITHUB_REF_NAME" dist/*.whl --clobber
+
+      # 跟 lottery-reader 同一個教訓：tag 建置的交付物在 Release，不要再多吃 artifact 配額
+      - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        with:
+          name: opencv-wheel-${{ matrix.arch }}
+          path: dist/*.whl
+          if-no-files-found: error
+          retention-days: 14
