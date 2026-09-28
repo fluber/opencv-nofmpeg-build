@@ -31,7 +31,9 @@ apt-get update -qq
 # OpenCV 就只能用自己 3rdparty/ 的原始碼、靜態連進 cv2.so——跟 build.sh 的 BUILD_xxx=ON 雙重保險。
 apt-get install -y -qq --no-install-recommends \
   build-essential binutils ca-certificates curl git > /dev/null
-ldd --version | head -1
+# 取第一行一律用 sed -n 1p 不用 head -1：head 讀完就關管線，前面的指令收到 SIGPIPE，
+# 配 pipefail 會變成 exit 141（2026-09-28 第一次在 GitHub 上跑就踩到，本機時序剛好沒事）。
+ldd --version | sed -n 1p
 
 echo "[ci] 安裝 uv $UV_VER ..."
 curl -LsSf "https://astral.sh/uv/$UV_VER/install.sh" | env UV_INSTALL_DIR=/usr/local/bin sh > /dev/null
@@ -39,7 +41,7 @@ export UV_PYTHON_PREFERENCE=only-managed UV_PYTHON_INSTALL_DIR=/opt/uv-python
 
 # 跟 fetch_deps.sh 一樣取 uv 管理的 standalone CPython——出貨包裡的就是這一份
 uv python install "$PYVER"
-PYROOT="$(ls -d /opt/uv-python/cpython-${PYVER}-*linux* | head -1)"
+PYROOT="$(ls -d /opt/uv-python/cpython-${PYVER}-*linux* | sed -n 1p)"
 export PYBIN="$PYROOT/bin/python3.12"
 export PYINC="$PYROOT/include/python3.12"
 export PYLIB="$PYROOT/lib/libpython3.12.so"
@@ -50,7 +52,7 @@ uv pip install -q -p /opt/tools/bin/python "numpy==$NUMPY_VER" "cmake==$CMAKE_VE
 export PATH="/opt/tools/bin:$PATH"
 export NPINC="$(/opt/tools/bin/python -c 'import numpy; print(numpy.get_include())')"
 export JOBS="${JOBS:-$(nproc)}"
-cmake --version | head -1
+cmake --version | sed -n 1p
 
 # 容器裡永遠從乾淨的 build/ 開始：掛進來的 build/ 可能是別的機器/參數留下的 CMakeCache
 rm -rf build dist
