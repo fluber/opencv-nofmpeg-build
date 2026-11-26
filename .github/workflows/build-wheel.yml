@@ -1,4 +1,4 @@
-# 產出不含 FFmpeg 的 OpenCV wheel（x86_64），掛到 Release 給 lottery-reader
+# 產出不含 FFmpeg 的 OpenCV wheel（x86_64 / aarch64），掛到 Release 給 lottery-reader
 # （以及之後的 yolo-trainer）打 deb 時下載。
 #
 # 兩種觸發：
@@ -8,8 +8,7 @@
 #
 # 丟進 ubuntu:22.04 容器編（ci/build_in_container.sh）：部署目標是 Ubuntu 22.04，
 # 在比較新的 glibc/libstdc++ 上編出來的 cv2.so 裝過去會 ImportError。
-# 只編 x86_64：目前沒有 ARM（樹莓派）部署。要加的話，matrix 加一組
-# { arch: aarch64, runner: ubuntu-24.04-arm }（公開 repo 免費，原生編譯，不要走 QEMU）。
+# aarch64 使用公開 repo 可用的 ubuntu-24.04-arm 原生 runner，不走 QEMU。
 name: 產生 OpenCV wheel
 
 on:
@@ -24,6 +23,8 @@ jobs:
         include:
           - arch: x86_64
             runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: write        # 建立 Release、上傳 wheel
@@ -48,15 +49,21 @@ jobs:
 
       # 同一個 tag 重跑時 Release 已存在；之後加 matrix 平行跑時也可能被另一個 job 先建好
       # ——create 失敗就當作已存在，再上傳。
-      - name: 掛到 Release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: 掛到 Release（手動只加掛 aarch64）
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && matrix.arch == 'aarch64')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
-            || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes \
-            || gh release view "$GITHUB_REF_NAME" >/dev/null
-          gh release upload "$GITHUB_REF_NAME" dist/*.whl --clobber
+          RELEASE="${GITHUB_REF_NAME}"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then RELEASE="v5.0.0-1"; fi
+          gh release view "$RELEASE" >/dev/null 2>&1 \
+            || gh release create "$RELEASE" --title "$RELEASE" --generate-notes \
+            || gh release view "$RELEASE" >/dev/null
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            gh release upload "$RELEASE" dist/opencv_headless_noffmpeg-*-linux_aarch64.whl
+          else
+            gh release upload "$RELEASE" dist/*.whl --clobber
+          fi
 
       # 跟 lottery-reader 同一個教訓：tag 建置的交付物在 Release，不要再多吃 artifact 配額
       - uses: actions/upload-artifact@v4
