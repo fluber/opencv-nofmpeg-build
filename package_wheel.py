@@ -152,6 +152,10 @@ def main() -> None:
             continue     # 有些版本/情況 cmake 自己會裝（ittnotify、ippicv），不要重複放
         src = here / rel
         if not src.is_file():
+            # ARM 沒有 Intel IPP，且 build.sh 明確以 WITH_IPP=OFF 建置；
+            # 沒有靜態連入就不需要把不存在的 IPP 授權檔硬塞進 wheel。
+            if name.startswith("ippicv-"):
+                continue
             die(f"找不到授權檔 {rel}（{name}）——對應的元件有靜態連進 cv2.so，授權檔一定要帶")
         licenses.append((src, name))
 
