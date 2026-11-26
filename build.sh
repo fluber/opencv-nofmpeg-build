@@ -80,6 +80,7 @@ if [ "${1:-}" = "--reconfigure" ] || [ ! -f CMakeCache.txt ]; then
     -D CMAKE_BUILD_TYPE=Release \
     -D BUILD_LIST="$BUILD_LIST" \
     -D WITH_FFMPEG=OFF \
+    -D WITH_IPP=OFF \
     -D WITH_V4L=ON \
     -D WITH_GTK=OFF \
     -D WITH_QT=OFF \

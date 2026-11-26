@@ -1,6 +1,6 @@
 # opencv-nofmpeg-build
 
-編一份**不含 FFmpeg** 的 OpenCV 5.0.0 Python wheel（x86_64，Ubuntu 22.04 以上），
+編一份**不含 FFmpeg** 的 OpenCV 5.0.0 Python wheel（x86_64 / aarch64，Ubuntu 22.04 以上），
 給 `lottery-reader`、`yolo-trainer` 的離線安裝包使用。
 
 ## 為什麼
@@ -35,7 +35,7 @@ libdc1394）關掉，離線安裝包裡就只剩真正用到的東西。
 
 ## 產出
 
-`dist/opencv_headless_noffmpeg-5.0.0-cp312-cp312-linux_x86_64.whl`
+`dist/opencv_headless_noffmpeg-5.0.0-cp312-cp312-linux_<arch>.whl`
 
 - 套件名 `opencv-headless-noffmpeg`，import 名稱一樣是 `cv2`。
   **不要跟官方 opencv-python 系列裝在同一個環境**——都會寫進同一個 `cv2/` 目錄互相覆蓋。
